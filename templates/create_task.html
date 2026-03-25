@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}New Task{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card p-4">
+      <h3 class="mb-4">Create New Task</h3>
+      <form method="POST">
+        <div class="mb-3">
+          <label class="form-label">Title <span class="text-danger">*</span></label>
+          <input type="text" name="title" class="form-control" required maxlength="225" autofocus>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <textarea name="description" class="form-control" rows="3" maxlength="500"></textarea>
+        </div>
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Priority</label>
+            <select name="priority" class="form-select">
+              <option value="P1">P1 — Critical</option>
+              <option value="P2">P2 — High</option>
+              <option value="P3" selected>P3 — Normal</option>
+              <option value="P4">P4 — Low</option>
+              <option value="P5">P5 — Trivial</option>
+              <option value="EOD">EOD — End of Day</option>
+            </select>
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Estimated Time (minutes)</label>
+            <input type="number" name="estimated_minutes" class="form-control" min="1" placeholder="e.g. 30">
+          </div>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary">Create Task</button>
+          <a href="/tasks" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

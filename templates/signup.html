@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Sign Up{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-4">
+    <div class="card p-4 mt-5">
+      <h3 class="mb-4 text-center">Create Account</h3>
+      <form method="POST">
+        <div class="mb-3">
+          <label class="form-label">Username</label>
+          <input type="text" name="username" class="form-control" required autofocus minlength="3">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password</label>
+          <input type="password" name="password" class="form-control" required minlength="8">
+          <div class="form-text">Min 8 chars, one uppercase, one lowercase, one digit.</div>
+        </div>
+        <button type="submit" class="btn btn-success w-100">Create Account</button>
+      </form>
+      <hr>
+      <p class="text-center mb-0">Already have an account? <a href="/login">Login</a></p>
+    </div>
+  </div>
+</div>
+{% endblock %}

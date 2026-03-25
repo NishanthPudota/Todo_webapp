@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block title %}My Tasks{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0">My Tasks</h2>
+  <a href="/tasks/create" class="btn btn-primary">+ New Task</a>
+</div>
+
+{% if tasks %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle">
+      <thead class="table-dark">
+        <tr>
+          <th>Title</th>
+          <th>Description</th>
+          <th>Priority</th>
+          <th>Created At (IST)</th>
+          <th>Estimated</th>
+          <th>Time Remaining</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for task in tasks %}
+        <tr class="{{ 'task-done' if task.is_done else '' }}" id="row-{{ task.id }}">
+
+          {# Title #}
+          <td><strong>{{ task.title }}</strong></td>
+
+          {# Description #}
+          <td class="text-muted small">{{ task.description or "—" }}</td>
+
+          {# Priority badge #}
+          <td>
+            <span class="badge-p badge-{{ task.priority }}">{{ task.priority }}</span>
+          </td>
+
+          {# Created at — IST, human-readable #}
+          <td class="small">
+            {# created_at comes back as e.g. "2025-03-21T14:30:00+05:30"
+               Replace T with space and strip timezone suffix for display #}
+            {{ task.created_at[:19] | replace("T", " ") }}
+            <span class="text-muted">IST</span>
+          </td>
+
+          {# Estimated minutes #}
+          <td class="text-center">
+            {% if task.estimated_minutes %}
+              {{ task.estimated_minutes }} min
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          {# ── Live countdown cell ──────────────────────────────────────────── #}
+          {#
+             Initial render by Jinja (server-side snapshot).
+             JavaScript takes over every second after page load.
+          #}
+          <td id="timer-{{ task.id }}" class="fw-semibold text-center">
+            {% if task.is_done %}
+              <span class="text-muted">—</span>
+
+            {% elif task.estimated_minutes is none or task.estimated_minutes == 0 %}
+              <span class="text-muted">—</span>
+
+            {% elif task.is_time_up %}
+              {# Already past deadline when the page was served #}
+              <span class="text-danger fw-bold time-up-pulse">⏰ Time Up!</span>
+
+            {% else %}
+              {# JS will replace this within 1 second with a precise hh:mm:ss #}
+              <span class="text-success">⏱ {{ task.remaining_minutes }} min left</span>
+            {% endif %}
+          </td>
+
+          {# Status badge #}
+          <td id="status-{{ task.id }}">
+            {% if task.is_done %}
+              <span class="badge bg-success">✓ Done</span>
+            {% elif task.is_time_up %}
+              <span class="badge bg-danger">⏰ Overdue</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">Pending</span>
+            {% endif %}
+          </td>
+
+          {# Action buttons #}
+          <td>
+            {% if not task.is_done %}
+            <form method="POST" action="/tasks/{{ task.id }}/done" class="d-inline">
+              <button class="btn btn-sm btn-success" title="Mark as done">✓</button>
+            </form>
+            {% endif %}
+            <form method="POST" action="/tasks/{{ task.id }}/delete" class="d-inline"
+                  onsubmit="return confirm('Delete this task?')">
+              <button class="btn btn-sm btn-danger" title="Delete">✕</button>
+            </form>
+          </td>
+
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── Live countdown JavaScript ─────────────────────────────────────────────── #}
+{#
+   How it works:
+   1. Backend returns remaining_minutes at the moment the response was built.
+   2. We convert that to an ABSOLUTE deadline: deadline = now + remaining_minutes * 60_000 ms
+   3. Every second JS recalculates: secondsLeft = (deadline - Date.now()) / 1000
+      This gives a real second-level countdown even though the server only gave minutes.
+   4. Colour coding:
+        > 10 min  → green
+        5–10 min  → orange
+        2–5 min   → yellow/warning
+        < 2 min   → red
+        0         → red + pulsing "⏰ Time Up!"
+   5. Done tasks and tasks without an estimate are skipped entirely.
+#}
+
+<script>
+// Build timer data from server-side Jinja rendering
+// Only include tasks that are active and have an estimate and are not already time-up
+const TIMERS = [
+  {% for task in tasks %}
+  {% if not task.is_done
+       and task.estimated_minutes
+       and task.estimated_minutes > 0
+       and not task.is_time_up %}
+  {
+    id:               "{{ task.id }}",
+    remainingMinutes: {{ task.remaining_minutes }},
+  },
+  {% endif %}
+  {% endfor %}
+];
+
+// Map task ID → absolute deadline timestamp (milliseconds since epoch)
+const deadlines = {};
+const pageLoadTime = Date.now();
+
+TIMERS.forEach(t => {
+  // remaining_minutes from the server is the accurate value at page-load time.
+  // Anchoring to pageLoadTime (not Date.now() inside forEach) keeps all timers
+  // consistent even if forEach takes a few ms.
+  deadlines[t.id] = pageLoadTime + t.remainingMinutes * 60 * 1000;
+});
+
+
+// Format total seconds into a human-readable string
+function formatTime(totalSeconds) {
+  if (totalSeconds <= 0) return null;   // null = signal that time is up
+
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = Math.floor(totalSeconds % 60);
+
+  const mm = String(m).padStart(2, '0');
+  const ss = String(s).padStart(2, '0');
+
+  if (h > 0) {
+    return `${h}h ${mm}m ${ss}s`;
+  } else if (m > 0) {
+    return `${m}m ${ss}s`;
+  } else {
+    return `${s}s`;
+  }
+}
+
+
+// Determine the Bootstrap / custom colour class based on time left
+function colourClass(secondsLeft) {
+  const minutes = secondsLeft / 60;
+  if (minutes > 10) return 'text-success';
+  if (minutes > 5)  return 'text-orange';
+  if (minutes > 2)  return 'text-warning';
+  return 'text-danger';
+}
+
+
+// Main tick — called once on load, then every second
+function tick() {
+  const now = Date.now();
+
+  Object.entries(deadlines).forEach(([taskId, deadline]) => {
+    const timerCell  = document.getElementById(`timer-${taskId}`);
+    const statusCell = document.getElementById(`status-${taskId}`);
+
+    if (!timerCell) return;
+
+    const secondsLeft = Math.floor((deadline - now) / 1000);
+
+    if (secondsLeft <= 0) {
+      // ── Time is up ────────────────────────────────────────────────────────
+      timerCell.classList.add('time-up-pulse');
+      timerCell.innerHTML =
+        '<span class="text-danger fw-bold">⏰ Time Up!</span>';
+
+      if (statusCell) {
+        statusCell.innerHTML =
+          '<span class="badge bg-danger">⏰ Overdue</span>';
+      }
+
+      // Remove from deadlines — no need to update this cell ever again
+      delete deadlines[taskId];
+
+    } else {
+      // ── Counting down ─────────────────────────────────────────────────────
+      const formatted = formatTime(secondsLeft);
+      const colour    = colourClass(secondsLeft);
+
+      timerCell.classList.remove('time-up-pulse');
+      timerCell.innerHTML =
+        `<span class="${colour} fw-semibold">⏱ ${formatted}</span>`;
+    }
+  });
+}
+
+// Fire immediately on page load, then every 1 second
+tick();
+setInterval(tick, 1000);
+</script>
+
+{% else %}
+{# Empty state #}
+<div class="text-center py-5 text-muted">
+  <h4>No tasks yet.</h4>
+  <p>Click <strong>+ New Task</strong> to get started.</p>
+</div>
+{% endif %}
+
+{% endblock %}
